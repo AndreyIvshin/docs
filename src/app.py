@@ -17,8 +17,8 @@ def copy_to_tmp(mhtml):
     shutil.copy(f"{mhtml}", path)
     return path
 
-def main(mhtml, clear):
-    if clear:
+def main(mhtml, keep):
+    if not keep:
         clear_tmp()
 
     path = copy_to_tmp(mhtml)
@@ -46,4 +46,4 @@ def main(mhtml, clear):
 
 if __name__ == "__main__":
     args = cli_args()
-    main(args.mhtml, args.clear)
+    main(args.mhtml, args.keep)

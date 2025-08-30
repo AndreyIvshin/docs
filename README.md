@@ -10,6 +10,9 @@ PYTHONPATH=src python src/app.py -m data/1.mhtml
 ```
 Original `data/1.mhtml` gets converted into `tmp/1.mhtml`
 
+>[!TIP]
+>Use `-k` option to NOT purge the 'tmp' directory after the previous run
+
 Run integration test via:
 ```bash
 PYTHONPATH=src:test python test/integration.py
