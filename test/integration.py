@@ -34,7 +34,7 @@ CONFIG = [
 def test_everything():
     for case in CONFIG:
         for mhtml, expected_report in case.items():
-            actual_report = main(mhtml, clear=False)
+            actual_report = main(mhtml, keep=True)
             assert actual_report == expected_report, (
                 f"Test failed for {mhtml}:\n"
                 f"Expected: {expected_report}\n"
