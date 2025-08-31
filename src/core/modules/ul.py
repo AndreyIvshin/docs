@@ -1,7 +1,7 @@
 from core.module import Module
 import time, json
 
-class TocRemediator(Module):
+class UlRemediator(Module):
     def __init__(self, mhtml_manipulator, logger_factory, screenshot_maker, llm, report):
         super().__init__(mhtml_manipulator, logger_factory)
         self.screenshot_maker = screenshot_maker
@@ -9,12 +9,12 @@ class TocRemediator(Module):
         self.report = report
 
     def fix_mhtml(self, path):
-        self.logger.debug(f"Starting TOC remediation...")
+        self.logger.debug(f"Starting UL remediation...")
         start_time = time.time()
         counter = 0
         
         self.logger.debug(f"Making screenshots...")
-        images = self.screenshot_maker.convert(path, width=1280, chunk_height=2000)
+        images = self.screenshot_maker.convert(path, width=1280, chunk_height=4000)
         
         self.logger.debug(f"Extracting HTML...")
         html = self.mhtml_manipulator.exec(path, """
@@ -26,45 +26,46 @@ class TocRemediator(Module):
         
         if html:
             self.logger.debug(f"Calling LLM...")
-            response = self.__call_llm([images[0]], html[:100000] if len(html) > 100000 else html)
+            response = self.__call_llm(images, html)
             
             self.logger.debug(f"LLM response: \n{response}")
             if response != "None":
-                tocs = []
-                for toc in json.loads(response):
-                    toc["replacement"] = self.__generate_toc(toc["data"])
-                    tocs.append(toc)
-                    break # choose the first one
-                response = json.dumps(tocs)
+                uls = []
+                response = json.loads(response)
+                self.logger.debug(f"Restoring contents...")
+                self.__restore_content(path, response)
+                
+                for ul in response:
+                    ul["replacement"] = self.__generate_ul(ul["data"])
+                    uls.append(ul)
+                response = json.dumps(uls)
                 self.logger.debug(f"LLM response enriched: \n{response}")
+
                 self.logger.debug(f"Modifying DOM...")
                 counter = self.__modify_dom(path, response)
         else:
             self.logger.error(f"No co_document_0! Skipping...")
 
-        self.logger.debug(f"TOC remediation completed in {time.time() - start_time:.2f} seconds.")
-        self.logger.info(f"Remediated {counter} TOCs.")
-        self.report["toc"] = counter
+        self.logger.debug(f"UL remediation completed in {time.time() - start_time:.2f} seconds.")
+        self.logger.info(f"Remediated {counter} ULs.")
+        self.report["ul"] = counter
     
     def __call_llm(self, images, html):
         response = self.llm.ask(images=images,prompt=f"""
-            Analyze image attached and verify whether this page contins proper table of contents or not.
-            Searching for table of contents do not rely on html - use image only.
-            Do not misinterpret table of contents with other tables or orderer/unordered lists.
-            If page doesn't contin table of contents - return just "None".
-            If not certain - return just "None".
-            If table of contents is certainly present - use html attached to correctly capture all its data.
-            If table of contents is certainly present - response should be organized in this format:
+            I need you to analyze a document and identify all unordered lists based on their visual appearance. This includes:
+            - Bullet points (e.g., •, -, or similar symbols) that are visually grouped together.
+            - Bullet points that are grouped under headings or categories, even if the headings are not explicitly part of the list.
+            - Lists that are visually structured as unordered lists, even if they are not marked up as <ul> or <li> in the HTML.
+            Do not rely on the HTML markup to determine whether something is an unordered list, as the markup may not be accurate. Instead, focus on how the content looks visually.
+            For each unordered list you find, provide the following structured response:
             [
                 {{
                     "selector": "first clear id selector to use for replacement, like this #some_id",
                     "other_selectors": ["other id selectors to be deleted, leave empty if the element to be replaced contains all others"],
                     "data": {{
-                        "heading": "content of the heading, if present, otherwise null",
                         "elements": [
                             {{
-                                "content": "content of the element",
-                                "page_number": "page number, if present, otherwise null"
+                                "id": "clear id selector of the list element, that contins text, like this #some_id"
                             }},
                             ...
                         ]
@@ -81,48 +82,53 @@ class TocRemediator(Module):
         if response.startswith("```json") and response.endswith("```"):
             response = response[len("```json"):-len("```")].strip()
         return response
+    
+    def __restore_content(self, path, response):
+        ids = []
+        for item in response:
+            ul_ids = [element["id"] for element in item["data"]["elements"]]
+            ids.extend(ul_ids)
 
-    def __generate_toc(self, toc):
-        heading = toc["heading"]
-        elements = toc["elements"]
+        contents = json.loads(self.mhtml_manipulator.exec(path, f"""
+            (function() {{
+                let ids = {json.dumps(ids)};
+                let contents = {{}};
+                for (let id of ids) {{
+                    const cleanId = id.startsWith("#") ? id.slice(1) : id;
+                    const element = document.getElementById(cleanId);
+                    contents[id] = element ? element.innerHTML : null;
+                }}
+                return JSON.stringify(contents);
+            }})();
+        """))
+
+        for item in response:
+            for element in item["data"]["elements"]:
+                id = element["id"]
+                element["content"] = contents[id]
+
+    def __generate_ul(self, ul):
+        elements = ul["elements"]
         html = f"""<style>
-            .a11ypoc-toc-nav {{
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
+            .a11y-ul {{
                 margin: 20px 0;
-                font-weight: bold;
-            }}
-            .a11ypoc-toc-heading {{
-                font-size: 1.25em;
-                margin-bottom: 10px;
-            }}
-            .a11ypoc-toc-list {{
+                padding: 0 20px;
                 list-style: none;
-                padding: 0;
             }}
-            .a11ypoc-toc-item {{
-                display: flex;
-                justify-content: space-between;
+            .a11y-li {{
                 margin-bottom: 10px;
-            }}
-            .a11ypoc-toc-page {{
-                margin-left: auto;
             }}
         </style>
-        <nav class="a11ypoc-toc-nav" aria-label="{heading}">
-            <h3 class="a11ypoc-toc-heading">{heading}</h3>
-            <ul class="a11ypoc-toc-list">
+        <ul class="a11y-ul">
         """
         for element in elements:
             html += f"""
-                <li class="a11ypoc-toc-item">
+                <li class="a11y-li">
                     {element["content"]}
-                    {f'<span class="a11ypoc-toc-page">{element["page_number"]}</span>' if element["page_number"] else ""}
                 </li>
             """
         html += """
-            </ul>
-        </nav>
+        </ul>
         """
         return html
 
