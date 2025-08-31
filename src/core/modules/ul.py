@@ -61,7 +61,7 @@ class UlRemediator(Module):
             [
                 {{
                     "selector": "first clear id selector to use for replacement, like this #some_id",
-                    "other_selectors": ["other id selectors to be deleted, leave empty if the element to be replaced contains all others"],
+                    "other_selectors": ["other id selectors to be deleted if initial selector doesn't contain all elements inside of it"],
                     "data": {{
                         "elements": [
                             {{
@@ -74,7 +74,10 @@ class UlRemediator(Module):
                 ...
             ]
 
-            **Respond with prettified JSON only. Do not use markdown, code blocks, or any other formatting.**
+            **Important Notes:**
+            - Do not include any additional keys or wrappers.
+            - If no clear visual grouping exists, do not include the list in the response.
+            - Respond with prettified JSON only. Do not use markdown, code blocks, or any other formatting.
 
             HTML:
             {html}
