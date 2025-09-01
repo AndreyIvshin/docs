@@ -15,6 +15,7 @@ class HeadingRemediator(Module):
             self.__pattern_co_headtext_co_hAlign1_1_a,
             self.__pattern_co_paragraph_1_A,
             self.__pattern_headnote,
+            self.__pattern_co_headtext_co_hAlign2_1_A,
             self.__pattern_co_paragraph_co_hAlign2,
             self.__pattern_co_headtext_co_hAlign1_general,
         ]:
@@ -243,15 +244,16 @@ class HeadingRemediator(Module):
                     if (targetElement) {
                         const outerElement = document.querySelector(outerClass);
                         if (outerElement) {
-                            const textDiv = outerElement.querySelector(".co_headtext");
-                            if (textDiv) {
-                                const textContent = textDiv.textContent.trim();
+                            const elements = outerElement.querySelectorAll(':scope > .co_headtext');
+                            elements.forEach(element => {
                                 const h3Element = document.createElement('h3');
                                 h3Element.className = 'a11ypoc-heading-centered';
-                                h3Element.textContent = textContent;
-                                textDiv.replaceWith(h3Element);
+                                while (element.firstChild) {
+                                    h3Element.appendChild(element.firstChild);
+                                }
+                                element.replaceWith(h3Element);
                                 h3_counter++;
-                            }
+                            });
                         }
                     }
                 }
@@ -346,4 +348,54 @@ class HeadingRemediator(Module):
         counters[0] = int(counters[0])
         counters[1] = int(counters[1])
         self.logger.debug(f"Pattern #5 replaced {counters[0]} h3 and {counters[1]} h4 headings.")
+        return counters
+
+    # BEFORE: <div class="co_headtext co_hAlign2"><strong>10. Some Thing</strong></div>
+    # AFTER:  <h3 class="a11ypoc-heading-centered">10. Some Thing</h3>
+    #
+    # BEFORE: <div class="co_headtext co_hAlign2"><strong>A. Some Other Thing</strong></div>
+    # AFTER:  <h4 class="a11ypoc-heading-centered">A. Some Other Thing</h4>
+    def __pattern_co_headtext_co_hAlign2_1_A(self, path):
+        self.logger.debug(f"Pattern #6...")
+        counters = self.mhtml_manipulator.exec(path, """
+            (function() {
+                h3_counter = 0;
+                h4_counter = 0;
+                const style = document.createElement('style');
+                style.textContent = `
+                .a11ypoc-heading-centered {
+                    text-align: center;
+                    margin: 1em 0;
+                }
+                `;
+                document.head.appendChild(style);
+
+                const targetElement = document.getElementById("co_document_0");
+                const outerElements = targetElement.querySelectorAll('.co_headtext');
+                outerElements.forEach(outerElement => {
+                    const elements = outerElement.querySelectorAll('.co_headtext.co_hAlign2');
+                    let upperCaseLetterAndDot = /^[A-Z]\\./;
+                    elements.forEach(element => {
+                        const textContent = element.textContent.trim();
+                        let hElement = null;
+                        if (upperCaseLetterAndDot.test(textContent)) {
+                            hElement = document.createElement('h4');
+                            h4_counter++;
+                        } else {
+                            hElement = document.createElement('h3');
+                            h3_counter++;
+                        }
+                        hElement.className = 'a11ypoc-heading-centered';
+                        while (element.firstChild) {
+                            hElement.appendChild(element.firstChild);
+                        }
+                        element.replaceWith(hElement);
+                    });
+                });
+                return [h3_counter, h4_counter];
+            })();
+        """)
+        counters[0] = int(counters[0])
+        counters[1] = int(counters[1])
+        self.logger.debug(f"Pattern #6 replaced {counters[0]} h3 and {counters[1]} h4 headings.")
         return counters
