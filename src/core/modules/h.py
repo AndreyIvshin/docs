@@ -142,10 +142,10 @@ class HeadingRemediator(Module):
                             const previousElement = elements[index - 1];
                             if (previousElement && previousElement.classList.contains('co_paragraph')) {
                                 const prevChildren = Array.from(previousElement.children);
-                                if (prevChildren.length === 1 && prevChildren[0].tagName === 'STRONG' && prevChildren[0].textContent.trim() === 'Jurisprudence') {
+                                if (prevChildren.length === 1 && prevChildren[0].tagName === 'STRONG') {
                                     const prevHeadingElement = document.createElement('h3');
                                     prevHeadingElement.className = 'a11ypoc-heading';
-                                    prevHeadingElement.textContent = 'Jurisprudence';
+                                    prevHeadingElement.textContent = prevChildren[0].textContent.trim();
                                     previousElement.replaceWith(prevHeadingElement);
                                     h3_counter++;
                                 }
@@ -398,4 +398,63 @@ class HeadingRemediator(Module):
         counters[0] = int(counters[0])
         counters[1] = int(counters[1])
         self.logger.debug(f"Pattern #6 replaced {counters[0]} h3 and {counters[1]} h4 headings.")
+        return counters
+
+    def __pattern_co_headtext_and_halign2(self, path):
+        self.logger.debug(f"Pattern #7...")
+        counters = self.mhtml_manipulator.exec(path, """
+            (function() {
+                let h3_counter = 0;
+                let h4_counter = 0;
+                const style = document.createElement('style');
+                style.textContent = `
+                .a11ypoc-heading {
+                    font-weight: bold;
+                    margin: 1em 0;
+                }
+                .a11ypoc-heading-centered {
+                    text-align: center;
+                    margin: 1em 0;
+                }
+                `;
+                document.head.appendChild(style);
+
+                const targetElement = document.getElementById("co_document_0");
+                const elements = targetElement.querySelectorAll('.co_headtext, .co_hAlign2');
+                elements.forEach((element) => {
+                    const children = Array.from(element.children);
+                    if (children.length > 0 && children[0].tagName === 'STRONG') {
+                        const strongText = children[0].textContent.trim();
+                        const romanPattern = /^(I{1,3}|IV|V|VI|VII|VIII|IX|X)\./; // Matches Roman numerals followed by a dot
+                        const uppercasePattern = /^[A-Z]\./; // Matches a single uppercase letter followed by a dot
+
+                        let headingTag = null;
+                        let headingClass = 'a11ypoc-heading'; // Default class for headings
+                        if (romanPattern.test(strongText)) {
+                            headingTag = 'h3';
+                            h3_counter++;
+                        } else if (uppercasePattern.test(strongText)) {
+                            headingTag = 'h4';
+                            h4_counter++;
+                        }
+
+                        if (headingTag) {
+                            if (element.classList.contains('co_hAlign2')) {
+                                headingClass = 'a11ypoc-heading-centered'; // Use centered style for co_hAlign2
+                            }
+                            const headingElement = document.createElement(headingTag);
+                            headingElement.className = headingClass;
+                            children[0].childNodes.forEach(child => {
+                                headingElement.appendChild(child.cloneNode(true));
+                            });
+                            element.replaceWith(headingElement);
+                        }
+                    }
+                });
+                return [h3_counter, h4_counter];
+            })();
+        """)
+        counters[0] = int(counters[0])
+        counters[1] = int(counters[1])
+        self.logger.debug(f"Pattern #4 replaced {counters[0]} h3 and {counters[1]} h4 headings.")
         return counters

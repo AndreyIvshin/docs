@@ -1,7 +1,7 @@
 from app import main
 
 DATA = [
-    {"data/1.mhtml":  {"toc": 0, "ul": 7, "h3": 7, "h4": 5}}, # 5 ul in table?
+    {"data/1.mhtml":  {"toc": 0, "ul": 7, "h3": 8, "h4": 5}}, # 5 ul in table?
     {"data/2.mhtml":  {"toc": 1, "ul": -1, "h3": 27, "h4": 0}}, # too sparce ul
     {"data/3.mhtml":  {"toc": 0, "ul": -1, "h3": 1, "h4": 0}},
     {"data/4.mhtml":  {"toc": 0, "ul": -1, "h3": 4, "h4": 4}},
@@ -18,8 +18,8 @@ DATA = [
     {"data/15.mhtml": {"toc": 0, "ul": -1, "h3": 0, "h4": 0}},
     {"data/16.mhtml": {"toc": 0, "ul": -1, "h3": 11, "h4": 2}},
     {"data/17.mhtml": {"toc": 0, "ul": -1, "h3": 0, "h4": 0}}, # no headings?
-    {"data/18.mhtml": {"toc": 0, "ul": -1, "h3": -1, "h4": -1}},
-    {"data/19.mhtml": {"toc": 0, "ul": -1, "h3": -1, "h4": -1}},
+    {"data/18.mhtml": {"toc": 0, "ul": -1, "h3": 2, "h4": 0}},
+    {"data/19.mhtml": {"toc": 0, "ul": -1, "h3": 2, "h4": 3}},
     {"data/20.mhtml": {"toc": 0, "ul": -1, "h3": -1, "h4": -1}},
     {"data/21.mhtml": {"toc": 0, "ul": -1, "h3": -1, "h4": -1}},
     # {"data/22.mhtml": {"toc": -1, "ul": -1, "h3": -1, "h4": -1}}, # no No co_document_0!
