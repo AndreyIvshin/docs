@@ -74,6 +74,13 @@ class HeadingRemediator(Module):
     # AFTER:  <h3 class="a11ypoc-heading">Introduction</h3>
     #
     # BEFORE: <div class="co_paragraph">
+    #           <strong>Jurisprudention</strong>
+    #         </div>
+    #         {{ resolved h3 }}
+    # AFTER:  <h3 class="a11ypoc-heading">Jurisprudention</h3>
+    #         {{ resolved h3 }}
+    #
+    # BEFORE: <div class="co_paragraph">
     #           <strong><em>A.</em></strong>
     #           <strong>
     #             <em> — Number of women on the board and in executive officer positions
@@ -105,7 +112,7 @@ class HeadingRemediator(Module):
 
                 const targetElement = document.getElementById("co_document_0");
                 const elements = targetElement.querySelectorAll('.co_paragraph');
-                elements.forEach(element => {
+                elements.forEach((element, index) => {
                     const children = Array.from(element.children);
                     if (children.length === 2 && children.every(child => child.tagName === 'STRONG')) {
                         const firstChildText = children[0].textContent.trim();
@@ -130,6 +137,19 @@ class HeadingRemediator(Module):
                             headingElement.appendChild(child.cloneNode(true));
                         });
                         element.replaceWith(headingElement);
+                        if (headingTag === 'h3' && index > 0) {
+                            const previousElement = elements[index - 1];
+                            if (previousElement && previousElement.classList.contains('co_paragraph')) {
+                                const prevChildren = Array.from(previousElement.children);
+                                if (prevChildren.length === 1 && prevChildren[0].tagName === 'STRONG' && prevChildren[0].textContent.trim() === 'Jurisprudence') {
+                                    const prevHeadingElement = document.createElement('h3');
+                                    prevHeadingElement.className = 'a11ypoc-heading';
+                                    prevHeadingElement.textContent = 'Jurisprudence';
+                                    previousElement.replaceWith(prevHeadingElement);
+                                    h3_counter++;
+                                }
+                            }
+                        }
                     }
                 });
                 return [h3_counter, h4_counter];
@@ -275,34 +295,48 @@ class HeadingRemediator(Module):
     #         </div>
     # AFTER:  <h4 class="a11ypoc-header-centered">Part 1 — Capital Adequacy</h4>
     def __pattern_co_paragraph_co_hAlign2(self, path):
-        self.logger.debug(f"Pattern #5...")
+        self.logger.debug("Starting Pattern #5 transformation...")
         counters = self.mhtml_manipulator.exec(path, """
             (function() {
                 let h3_counter = 0;
                 let h4_counter = 0;
                 const style = document.createElement('style');
                 style.textContent = `
-                .a11ypoc-heading-centered {
-                    text-align: center;
-                    margin: 1em 0;
-                }
+                    .a11ypoc-heading-centered {
+                        text-align: center;
+                        margin: 1em 0;
+                    }
                 `;
                 document.head.appendChild(style);
 
                 const targetElement = document.getElementById("co_document_0");
+                if (!targetElement) {
+                    console.error("Target element with ID 'co_document_0' not found.");
+                    return [h3_counter, h4_counter];
+                }
                 const elements = targetElement.querySelectorAll('.co_paragraph.co_hAlign2');
                 elements.forEach(element => {
                     const strongElements = element.querySelectorAll('strong');
-                    if (strongElements.length > 0) {
-                        let combinedText = '';
-                        strongElements.forEach(strong => {
-                            combinedText += strong.textContent.trim() + ' ';
-                        });
-                        combinedText = combinedText.trim();
-                        const hElement = document.createElement('h3');
-                        hElement.className = 'a11ypoc-heading-centered';
-                        hElement.textContent = combinedText;
-                        element.replaceWith(hElement);
+                    if (strongElements.length === 0) {
+                        console.warn("No <strong> elements found in:", element);
+                        return;
+                    }
+                    let containsPart = false;
+                    strongElements.forEach(strong => {
+                        const text = strong.textContent.trim();
+                        if (text.toLowerCase().startsWith("part")) {
+                            containsPart = true;
+                        }
+                    });
+                    const hElement = document.createElement(containsPart ? 'h4' : 'h3');
+                    hElement.className = 'a11ypoc-heading-centered';
+                    while (element.firstChild) {
+                        hElement.appendChild(element.firstChild);
+                    }
+                    element.replaceWith(hElement);
+                    if (containsPart) {
+                        h4_counter++;
+                    } else {
                         h3_counter++;
                     }
                 });
