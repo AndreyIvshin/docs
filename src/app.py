@@ -1,7 +1,7 @@
 import os, shutil, config
 from api.cli import cli_args
 from core.modules.id import IdMarker, IdUnmarker
-from core.modules.img import ImgFolder, ImgUnfolder
+from core.modules.img import ImgFolder, ImgUnfolder, ImagesRemediator
 from core.modules.toc import TocRemediator
 from core.modules.ul import UlRemediator
 from core.modules.h import HeadingRemediator
@@ -37,7 +37,8 @@ def main(mhtml, keep):
     for module in [
         IdMarker(mhtml_manipulator, logger_factory),
         # ImgFolder(mhtml_manipulator, logger_factory),
-        HeadingRemediator(mhtml_manipulator, logger_factory, report),
+        # HeadingRemediator(mhtml_manipulator, logger_factory, report),
+        ImagesRemediator(mhtml_manipulator, logger_factory, llm, report),
         # TocRemediator(mhtml_manipulator, logger_factory, screenshot_maker, llm, report),
         # UlRemediator(mhtml_manipulator, logger_factory, screenshot_maker, llm, report), # not ready
         # ImgUnfolder(mhtml_manipulator, logger_factory),
