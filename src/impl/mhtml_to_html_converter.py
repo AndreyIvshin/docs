@@ -8,20 +8,9 @@ class HtmlConverter:
     def exec(self, mhtml_path):
         self.__generate_ids(mhtml_path)
         html_path = self.__create_html(mhtml_path)
-        src_to_data = self.__get_images_data(html_path)
-        print(f"found: {len(src_to_data)}")
-        src_to_data = self.__resolve_images(mhtml_path, src_to_data)
-        print(f"resolved: {len(src_to_data)}")
-        counter = self.__replace_images(html_path, src_to_data)
-        print(f"replaced: {counter}")
-        
-        # New functionality: Replace CSS href links
-        href_to_data = self.__get_css_data(html_path)
-        print(f"CSS links found: {len(href_to_data)}")
-        href_to_data = self.__resolve_css(mhtml_path, href_to_data)
-        print(f"CSS links resolved: {len(href_to_data)}")
-        css_counter = self.__replace_css_links(html_path, href_to_data)
-        print(f"CSS links replaced: {css_counter}")
+        location_to_asset = self.__laod_assets(mhtml_path)
+        for l, a in location_to_asset.items():
+            print(f"{a}: {l}")
 
     def __generate_ids(self, path):
         return self.mhtml_manipulator.exec(path, """
@@ -174,3 +163,30 @@ class HtmlConverter:
                 return counter;
             }})();
         """)
+
+    def __laod_assets(self, mhtml_path):
+        location_to_asset = {}
+        counter = 0
+        with open(mhtml_path, "r", encoding="utf-8") as mhtml:
+            msg = email.message_from_file(mhtml)
+        types = {}
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            if content_type in types:
+                types[content_type] = types[content_type] + 1
+            else:
+                types[content_type] = 1
+            content_location = part.get("Content-Location")
+            bytes = part.get_payload(decode=True)
+            if bytes:
+                counter += 1
+                asset_path = f"assets/{content_type.split("/")[0]}-{counter}.{content_type.split("/")[-1]}"
+                local_path = f"{os.path.dirname(mhtml_path)}/{asset_path}"
+                with open(local_path, "wb") as img_file:
+                    img_file.write(bytes)
+                location_to_asset[content_location] = {}
+                location_to_asset[content_location]["asset"] = asset_path
+        print(types)
+        return location_to_asset
+    
+    

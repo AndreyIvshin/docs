@@ -39,13 +39,13 @@ def main(mhtml, keep):
     logger = logger_factory("app")  
     logger.warning(f"Processing {mhtml}")
 
-    HtmlConverter(mhtml_manipulator, html_manipulator).exec(path)
+    # HtmlConverter(mhtml_manipulator, html_manipulator).exec(path)
 
     for module in [
-        # IdMarker(mhtml_manipulator, logger_factory),
+        IdMarker(mhtml_manipulator, logger_factory),
         # ImgFolder(mhtml_manipulator, logger_factory),
         # HeadingRemediator(mhtml_manipulator, logger_factory, report),
-        # ImagesRemediator(mhtml_manipulator, logger_factory, llm, report),
+        ImagesRemediator(mhtml_manipulator, logger_factory, llm, report),
         # TocRemediator(mhtml_manipulator, logger_factory, screenshot_maker, llm, report),
         # UlRemediator(mhtml_manipulator, logger_factory, screenshot_maker, llm, report), # not ready
         # ImgUnfolder(mhtml_manipulator, logger_factory),

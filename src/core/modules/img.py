@@ -76,23 +76,23 @@ class ImagesRemediator(Module):
         self.__classify_images(src_to_data)
         self.logger.debug(f"Images classified: {len(src_to_data)}")
         
-        # for src, data in src_to_data.items():
-        #     if data["has_text"]:
-        #         self.logger.debug(f"Extracting text via LLM...")
-        #         data["text"] = self.__extract_text(data["path"])
+        for src, data in src_to_data.items():
+            if data["has_text"] == "true":
+                self.logger.debug(f"Extracting text via LLM...")
+                data["text"] = self.__extract_text(data["path"])
         
-        # for src, data in src_to_data.items():
-        #     if data["is_chart"]:
-        #         self.logger.debug(f"Extracting text via LLM...")
-        #         data["description"] = self.__extract_description(data["path"])
+        for src, data in src_to_data.items():
+            if data["is_chart"] == "true":
+                self.logger.debug(f"Extracting description via LLM...")
+                data["description"] = self.__extract_description(data["path"])
 
-        # self.logger.debug(f"Adding text to mhtml...")
-        # counter = self.__add_text(path, src_to_data)
-        # self.logger.debug(f"Added text: {counter}")
+        self.logger.debug(f"Adding text to mhtml...")
+        counter = self.__add_text(path, src_to_data)
+        self.logger.debug(f"Added text: {counter}")
 
-        # self.logger.debug(f"Replacing alt...")
-        # counter = self.__replace_alt(path, src_to_data)
-        # self.logger.debug(f"Alts replaced: {counter}")
+        self.logger.debug(f"Replacing alt...")
+        counter = self.__replace_alt(path, src_to_data)
+        self.logger.debug(f"Alts replaced: {counter}")
 
         self.logger.debug(f"Adding modals...")
         counter = self.__add_modals(path, src_to_data)
@@ -207,15 +207,17 @@ class ImagesRemediator(Module):
                 let counter = 0;
                 const rootElement = document.getElementById('co_document_0');
                 for (const [src, data] of Object.entries({json.dumps(src_to_data)})) {{
-                    let element = document.getElementById(data.id);
-                    while (element.parentElement.tagName.toLowerCase() !== 'div') {{
-                        element = element.parentElement;
+                    if (data.has_text === 'true') {{
+                        let element = document.getElementById(data.id);
+                        while (element.parentElement.tagName.toLowerCase() !== 'div') {{
+                            element = element.parentElement;
+                        }}
+                        const paragraph = document.createElement('p');
+                        paragraph.textContent = data.text;
+                        paragraph.classList.add('a11ypoc-image-text');
+                        element.insertAdjacentElement('afterend', paragraph);
+                        counter++;
                     }}
-                    const paragraph = document.createElement('p');
-                    paragraph.textContent = data.text;
-                    paragraph.classList.add('a11ypoc-image-text');
-                    element.insertAdjacentElement('afterend', paragraph);
-                    counter++;
                 }}
                 return counter;
             }})();
@@ -238,7 +240,6 @@ class ImagesRemediator(Module):
     def __add_modals(self, path, src_to_data):
         return self.mhtml_manipulator.exec(path, f"""
             (function() {{
-                // Add a <script> section to the <head> for reusable event logic
                 const script = document.createElement('script');
                 script.textContent = `
                     function logInfo(imageId) {{
@@ -246,14 +247,12 @@ class ImagesRemediator(Module):
                     }}
                 `;
                 document.head.appendChild(script);
-
-                // Add a <style> section to the <head> for styling
                 const style = document.createElement('style');
                 style.textContent = `
-                    .a11ypoc-image-text {{
+                    .a11ypoc-image-description {{
                         margin-bottom: 1em;
                     }}
-                    .a11ypoc-log-button {{
+                    .a11ypoc-image-description-button {{
                         margin-top: 0.5em;
                         padding: 0.5em 1em;
                         background-color: #007BFF;
@@ -262,7 +261,7 @@ class ImagesRemediator(Module):
                         border-radius: 4px;
                         cursor: pointer;
                     }}
-                    .a11ypoc-log-button:hover {{
+                    .a11ypoc-image-description-button:hover {{
                         background-color: #0056b3;
                     }}
                 `;
@@ -271,21 +270,18 @@ class ImagesRemediator(Module):
                 let counter = 0;
                 const rootElement = document.getElementById('co_document_0');
                 for (const [src, data] of Object.entries({json.dumps(src_to_data)})) {{
-                    let element = document.getElementById(data.id);
-                    while (element.parentElement.tagName.toLowerCase() !== 'div') {{
-                        element = element.parentElement;
+                    if (data.is_chart === 'true') {{
+                        let element = document.getElementById(data.id);
+                        while (element.parentElement.tagName.toLowerCase() !== 'div') {{
+                            element = element.parentElement;
+                        }}
+                        const modalHTML = `
+                            <p class="a11ypoc-image-description"><strong>${{data.description}}<strong></p>
+                            <button class="a11ypoc-image-description-button" onclick="logInfo('${{data.id}}')">Show Description</button>
+                        `;
+                        element.insertAdjacentHTML('afterend', modalHTML);
+                        counter++;
                     }}
-                    
-                    // Generate the paragraph and button as a single HTML string
-                    const modalHTML = `
-                        <p class="a11ypoc-image-text">${{data.text}}</p>
-                        <button class="a11ypoc-log-button" onclick="logInfo('${{data.id}}')">Log Info</button>
-                    `;
-                    
-                    // Insert the generated HTML after the target element
-                    element.insertAdjacentHTML('afterend', modalHTML);
-
-                    counter++;
                 }}
                 return counter;
             }})();
