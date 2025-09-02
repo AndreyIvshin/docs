@@ -1,4 +1,4 @@
-import email, os, json
+import email, os, json, html, re
 
 class HtmlConverter:
     def __init__(self, mhtml_manipulator, html_manipulator):
@@ -6,25 +6,12 @@ class HtmlConverter:
         self.html_manipulator = html_manipulator
     
     def exec(self, mhtml_path):
-        self.__generate_ids(mhtml_path)
         html_path = self.__create_html(mhtml_path)
-        location_to_asset = self.__laod_assets(mhtml_path)
-        for l, a in location_to_asset.items():
-            print(f"{a}: {l}")
-
-    def __generate_ids(self, path):
-        return self.mhtml_manipulator.exec(path, """
-            (function() {
-                counter = 0;
-                const allElements = document.querySelectorAll('*');
-                allElements.forEach(element => {
-                    if (!element.id) {
-                        element.id = `a11ypoc_marker_id_${counter++}`;
-                    }
-                });
-                return counter;
-            })();
-        """)
+        location_to_asset = self.__load_assets(mhtml_path)
+        self.__fix_css(html_path, location_to_asset)
+        self.__fix_html(html_path, location_to_asset)
+        print(self.__fix_link_crossorigin(html_path))
+        print(self.__fix_fonts(html_path, location_to_asset))
 
     def __create_html(self, mhtml_path):
         html = self.mhtml_manipulator.exec(mhtml_path, """
@@ -41,130 +28,7 @@ class HtmlConverter:
             os.makedirs(f"{dirname}/assets")
         return html_path
 
-    def __get_images_data(self, path):
-        return self.html_manipulator.exec(path, """
-            (function() {
-                const images = Array.from(document.querySelectorAll('img'));
-                return images.reduce((result, img) => {
-                    result[img.src] = {
-                        id: img.id,
-                        src: img.src || "none",
-                    };
-                    return result;
-                }, {});
-            })();
-        """)
-    
-    def __resolve_images(self, mhtml_path, src_to_data):
-        resolved_src_to_data = {}
-        counter = 0
-        with open(mhtml_path, "r", encoding="utf-8") as mhtml:
-            msg = email.message_from_file(mhtml)
-        types = {}
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            if content_type in types:
-                types[content_type] = types[content_type] + 1
-            else:
-                types[content_type] = 1
-            if content_type.startswith("image/"):
-                content_location = part.get("Content-Location")
-                if content_location in src_to_data:
-                    image_bytes = part.get_payload(decode=True)
-                    if image_bytes:
-                        extension = content_type.split("/")[-1]
-                        counter += 1
-                        asset_path = f"assets/image-{counter}.{extension}"
-                        local_path = f"{os.path.dirname(mhtml_path)}/{asset_path}"
-                        with open(local_path, "wb") as img_file:
-                            img_file.write(image_bytes)
-                        resolved_src_to_data[content_location] = {}
-                        resolved_src_to_data[content_location]["asset"] = asset_path
-        print(types)
-        return resolved_src_to_data
-
-    def __replace_images(self, html_path, src_to_data):
-        # Serialize the Python dictionary to a JSON string
-        src_to_data_json = json.dumps(src_to_data)
-
-        # Pass the JSON string into the JavaScript code
-        return self.html_manipulator.exec(html_path, f"""
-            (function() {{
-                let counter = 0;
-                const srcToData = {src_to_data_json};
-                const images = document.querySelectorAll('img');
-                
-                images.forEach(image => {{
-                    if (srcToData[image.src] && srcToData[image.src]['asset']) {{
-                        image.src = srcToData[image.src]['asset'];
-                        counter++;
-                    }}
-                }});
-                
-                return counter;
-            }})();
-        """)
-
-    # New method: Get CSS href links
-    def __get_css_data(self, path):
-        return self.html_manipulator.exec(path, """
-            (function() {
-                const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
-                return links.reduce((result, link) => {
-                    result[link.href] = {
-                        href: link.href || "none",
-                    };
-                    return result;
-                }, {});
-            })();
-        """)
-
-    # New method: Resolve CSS content
-    def __resolve_css(self, mhtml_path, href_to_data):
-        resolved_href_to_data = {}
-        counter = 0
-        with open(mhtml_path, "r", encoding="utf-8") as mhtml:
-            msg = email.message_from_file(mhtml)
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            if content_type == "text/css":
-                content_location = part.get("Content-Location")
-                if content_location in href_to_data:
-                    css_bytes = part.get_payload(decode=True)
-                    if css_bytes:
-                        counter += 1
-                        asset_path = f"assets/style-{counter}.css"
-                        local_path = f"{os.path.dirname(mhtml_path)}/{asset_path}"
-                        with open(local_path, "wb") as css_file:
-                            css_file.write(css_bytes)
-                        resolved_href_to_data[content_location] = {}
-                        resolved_href_to_data[content_location]["asset"] = asset_path
-        return resolved_href_to_data
-
-    # New method: Replace CSS href links
-    def __replace_css_links(self, html_path, href_to_data):
-        # Serialize the Python dictionary to a JSON string
-        href_to_data_json = json.dumps(href_to_data)
-
-        # Pass the JSON string into the JavaScript code
-        return self.html_manipulator.exec(html_path, f"""
-            (function() {{
-                let counter = 0;
-                const hrefToData = {href_to_data_json};
-                const links = document.querySelectorAll('link[rel="stylesheet"]');
-                
-                links.forEach(link => {{
-                    if (hrefToData[link.href] && hrefToData[link.href]['asset']) {{
-                        link.href = hrefToData[link.href]['asset'];
-                        counter++;
-                    }}
-                }});
-                
-                return counter;
-            }})();
-        """)
-
-    def __laod_assets(self, mhtml_path):
+    def __load_assets(self, mhtml_path):
         location_to_asset = {}
         counter = 0
         with open(mhtml_path, "r", encoding="utf-8") as mhtml:
@@ -189,4 +53,72 @@ class HtmlConverter:
         print(types)
         return location_to_asset
     
+    def __fix_css(self, html_path, location_to_asset):
+        css_images = {}
+        css_files = []
+        for location, data in location_to_asset.items():
+            asset = data["asset"]
+            if "/css/v2/images/" in location:
+                css_images[location.split("/css/v2/")[-1]] = asset
+            if asset.endswith(".css"):
+                css_files.append(f"{os.path.dirname(html_path)}/{asset}")
+        for css_file in css_files:
+            with open(css_file, "r") as file:
+                content = file.read()
+            for url, asset in css_images.items():
+                content = content.replace(f'url("{url}")', f'url("{asset[7:]}")')
+            with open(css_file, 'w') as file:
+                file.write(content)
     
+    def __fix_html(self, html_path, location_to_asset):
+        with open(html_path, "r") as file:
+            content = file.read()
+            print(content)
+        for location, data in location_to_asset.items():
+            content = content.replace(f'{html.escape(location)}', f'{data["asset"]}')
+        with open(html_path, 'w') as file:
+            file.write(content)
+
+    def __fix_link_crossorigin(self, html_path):
+        return self.html_manipulator.exec(html_path, """
+            (function() {
+                counter = 0;
+                const cssLinks = document.querySelectorAll('link[rel="stylesheet"][crossorigin]');
+                cssLinks.forEach(link => {
+                    link.removeAttribute('crossorigin');
+                });
+                const allElements = document.querySelectorAll('*');
+                allElements.forEach(element => {
+                    if (!element.id) {
+                        element.id = `a11ypoc_marker_id_${counter++}`;
+                    }
+                });
+                return counter;
+            })();
+        """)
+    
+    def __fix_fonts(self, html_path, location_to_asset):
+        self.html_manipulator.exec(html_path, """
+            (function() {
+                counter = 0;
+                const head = document.querySelector('head');
+                if (head) {
+                    const faCdnLink = document.createElement('link');
+                    faCdnLink.rel = 'stylesheet';
+                    faCdnLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css';
+                    head.appendChild(faCdnLink);
+                }
+                return counter;
+            })();
+        """)
+        css_files = []
+        for location, data in location_to_asset.items():
+            asset = data["asset"]
+            if asset.endswith(".css"):
+                css_files.append(f"{os.path.dirname(html_path)}/{asset}")
+        for css_file in css_files:
+            with open(css_file, "r") as file:
+                content = file.read()
+            content = re.sub(r'@font-face\s*{[^}]*}', '', content, flags=re.DOTALL)
+            with open(css_file, 'w') as file:
+                file.write(content)
