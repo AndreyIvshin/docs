@@ -1,4 +1,5 @@
 import time, json, email
+from itertools import islice
 from core.module import Module
 
 DISPLAY_MAP = {}
@@ -68,22 +69,34 @@ class ImagesRemediator(Module):
 
         self.logger.debug(f"Extracted images...")
         src_to_data = self.__extract_images(path)
-        for src, data in src_to_data.items():
-            print(data)
+        src_to_data = {src: src_to_data[src] for src in islice(src_to_data.keys(), 2)}
         self.logger.debug(f"Extracted {len(src_to_data)} images")
 
         self.logger.debug(f"Classifying images via LLM...")
         self.__classify_images(src_to_data)
         self.logger.debug(f"Images classified: {len(src_to_data)}")
         
-        for src, data in src_to_data.items():
-            if data["has_text"]:
-                self.logger.debug(f"Extracting text via LLM...")
-                data["text"] = self.__extract_text(data["path"])
+        # for src, data in src_to_data.items():
+        #     if data["has_text"]:
+        #         self.logger.debug(f"Extracting text via LLM...")
+        #         data["text"] = self.__extract_text(data["path"])
         
-        self.logger.debug(f"Adding text to mhtml...")
-        counter = self.__add_text(path, src_to_data)
-        self.logger.debug(f"Added text: {counter}")
+        # for src, data in src_to_data.items():
+        #     if data["is_chart"]:
+        #         self.logger.debug(f"Extracting text via LLM...")
+        #         data["description"] = self.__extract_description(data["path"])
+
+        # self.logger.debug(f"Adding text to mhtml...")
+        # counter = self.__add_text(path, src_to_data)
+        # self.logger.debug(f"Added text: {counter}")
+
+        # self.logger.debug(f"Replacing alt...")
+        # counter = self.__replace_alt(path, src_to_data)
+        # self.logger.debug(f"Alts replaced: {counter}")
+
+        self.logger.debug(f"Adding modals...")
+        counter = self.__add_modals(path, src_to_data)
+        self.logger.debug(f"Modals added: {counter}")
 
         self.logger.debug(f"Images remediation completed in {time.time() - start_time:.2f} seconds.")
         self.logger.info(f"Remediated {len(src_to_data)} images.")
@@ -127,15 +140,13 @@ class ImagesRemediator(Module):
     def __classify_images(self, src_to_data):
         paths = [data["path"] for src, data in src_to_data.items()]
         response = self.llm.ask(images=paths, prompt=f"""
-            Analyze every image attached and classify it by the following criterias:
-                - does this image contains text in the bottom?
-                - does this image a chart?
-            For every image analyzed, provide the following structured response:
+            For every image attached, provide the following structured response:
             ```json
             [
                 {{
-                    "has_text": true/false,
-                    "is_chart": true/false
+                    "has_text": "true/false - Does this image has plaint text description under it?",
+                    "is_chart": "true/false Is this image a chart?",
+                    "alt": "short description of the image"
                 }},
                 {{
                     ...
@@ -144,14 +155,14 @@ class ImagesRemediator(Module):
             ```
         """, max_tokens=15000, temperature=0, context="",)
         self.logger.debug(f"LLM response:\n{response}")
-        if response.startswith("```json") and response.endswith("```"):
-            response = response[len("```json"):-len("```")].strip()
+        response = response[len("```json"):-len("```")].strip()
         response = json.loads(response)
         i = 0
         for src, data in src_to_data.items():
             llm_response = response[i]
             data["has_text"] = llm_response["has_text"]
             data["is_chart"] = llm_response["is_chart"]
+            data["alt"] = llm_response["alt"]
             i += 1
     
     def __extract_text(self, path):
@@ -165,21 +176,115 @@ class ImagesRemediator(Module):
             ```
         """, max_tokens=15000, temperature=0, context="",)
         self.logger.debug(f"LLM response:\n{response}")
-        if response.startswith("```json") and response.endswith("```"):
-            response = response[len("```json"):-len("```")].strip()
+        response = response[len("```json"):-len("```")].strip()
         return json.loads(response)["text"]
+    
+    def __extract_description(self, path):
+        response = self.llm.ask(images=[path], prompt=f"""
+            Give me detailed description of the attached chart:
+            For each image analyzed, provide the following structured response:
+            ```json
+            {{
+                "description": "..."
+            }}
+            ```
+        """, max_tokens=15000, temperature=0, context="",)
+        self.logger.debug(f"LLM response:\n{response}")
+        response = response[len("```json"):-len("```")].strip()
+        return json.loads(response)["description"]
 
     def __add_text(self, path, src_to_data):
         return self.mhtml_manipulator.exec(path, f"""
             (function() {{
+                const style = document.createElement('style');
+                style.textContent = `
+                    .a11ypoc-image-text {{
+                        margin-bottom: 1em;
+                    }}
+                `;
+                document.head.appendChild(style);
+
                 let counter = 0;
-                const srcToData = {json.dumps(src_to_data)};
                 const rootElement = document.getElementById('co_document_0');
-                for (const [src, data] of Object.entries(srcToData)) {{
-                    const imageElement = document.getElementById(data.id);
-                    const divElement = document.createElement('div');
-                    divElement.textContent = data.text;
-                    imageElement.insertAdjacentElement('afterend', divElement);
+                for (const [src, data] of Object.entries({json.dumps(src_to_data)})) {{
+                    let element = document.getElementById(data.id);
+                    while (element.parentElement.tagName.toLowerCase() !== 'div') {{
+                        element = element.parentElement;
+                    }}
+                    const paragraph = document.createElement('p');
+                    paragraph.textContent = data.text;
+                    paragraph.classList.add('a11ypoc-image-text');
+                    element.insertAdjacentElement('afterend', paragraph);
+                    counter++;
+                }}
+                return counter;
+            }})();
+        """)
+    
+    def __replace_alt(self, path, src_to_data):
+        return self.mhtml_manipulator.exec(path, f"""
+            (function() {{
+                let counter = 0;
+                const rootElement = document.getElementById('co_document_0');
+                for (const [src, data] of Object.entries({json.dumps(src_to_data)})) {{
+                    let element = document.getElementById(data.id);
+                    element.alt = data.alt;
+                    counter++;
+                }}
+                return counter;
+            }})();
+        """)
+
+    def __add_modals(self, path, src_to_data):
+        return self.mhtml_manipulator.exec(path, f"""
+            (function() {{
+                // Add a <script> section to the <head> for reusable event logic
+                const script = document.createElement('script');
+                script.textContent = `
+                    function logInfo(imageId) {{
+                        console.log('Button clicked for image with ID: ' + imageId);
+                    }}
+                `;
+                document.head.appendChild(script);
+
+                // Add a <style> section to the <head> for styling
+                const style = document.createElement('style');
+                style.textContent = `
+                    .a11ypoc-image-text {{
+                        margin-bottom: 1em;
+                    }}
+                    .a11ypoc-log-button {{
+                        margin-top: 0.5em;
+                        padding: 0.5em 1em;
+                        background-color: #007BFF;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    }}
+                    .a11ypoc-log-button:hover {{
+                        background-color: #0056b3;
+                    }}
+                `;
+                document.head.appendChild(style);
+
+                let counter = 0;
+                const rootElement = document.getElementById('co_document_0');
+                for (const [src, data] of Object.entries({json.dumps(src_to_data)})) {{
+                    let element = document.getElementById(data.id);
+                    while (element.parentElement.tagName.toLowerCase() !== 'div') {{
+                        element = element.parentElement;
+                    }}
+                    
+                    // Generate the paragraph and button as a single HTML string
+                    const modalHTML = `
+                        <p class="a11ypoc-image-text">${{data.text}}</p>
+                        <button class="a11ypoc-log-button" onclick="logInfo('${{data.id}}')">Log Info</button>
+                    `;
+                    
+                    // Insert the generated HTML after the target element
+                    element.insertAdjacentHTML('afterend', modalHTML);
+
                     counter++;
                 }}
                 return counter;

@@ -1,6 +1,6 @@
 from impl.llm import OpenAIClient
 from impl.screenshot_maker import Mhtml2Png
-from impl.mhtml_manipulator import MhtmlManipulator
+from impl.mhtml_manipulator import MhtmlManipulator, HtmlManipulator
 import os, logging, colorlog
 
 def llm():
@@ -14,6 +14,9 @@ def creenshot_maker():
 
 def mhtml_manipulator():
     return MhtmlManipulator("tmp")
+
+def html_manipulator():
+    return HtmlManipulator("tmp")
 
 def logger_factory():
     return lambda name: __logger(name)

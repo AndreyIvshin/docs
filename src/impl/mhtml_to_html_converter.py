@@ -1,0 +1,103 @@
+import email, os, json
+
+class HtmlConverter:
+    def __init__(self, mhtml_manipulator, html_manipulator):
+        self.mhtml_manipulator = mhtml_manipulator
+        self.html_manipulator = html_manipulator
+    
+    def exec(self, mhtml_path):
+        self.__generate_ids(mhtml_path)
+        html_path = self.__create_html(mhtml_path)
+        src_to_data = self.__get_images_data(html_path)
+        print(f"found: {len(src_to_data)}")
+        src_to_data = self.__resolve_images(mhtml_path, src_to_data)
+        print(f"resolved: {len(src_to_data)}")
+        counter = self.__replace_images(html_path, src_to_data)
+        print(f"replaced: {counter}")
+
+    def __generate_ids(self, path):
+        return self.mhtml_manipulator.exec(path, """
+            (function() {
+                counter = 0;
+                const allElements = document.querySelectorAll('*');
+                allElements.forEach(element => {
+                    if (!element.id) {
+                        element.id = `a11ypoc_marker_id_${counter++}`;
+                    }
+                });
+                return counter;
+            })();
+        """)
+
+    def __create_html(self, mhtml_path):
+        html = self.mhtml_manipulator.exec(mhtml_path, """
+            (function() {
+                return document.documentElement.outerHTML;
+            })();
+        """)
+        dirname = os.path.dirname(mhtml_path)
+        filename = os.path.basename(mhtml_path)[:-6] + ".html"
+        html_path = f"{dirname}/{filename}"
+        with open(html_path, "w", encoding="utf-8") as file:
+            file.write(html)
+        if not os.path.exists(f"{dirname}/assets"):
+            os.makedirs(f"{dirname}/assets")
+        return html_path
+
+    def __get_images_data(self, path):
+        return self.html_manipulator.exec(path, """
+            (function() {
+                const images = Array.from(document.querySelectorAll('img'));
+                return images.reduce((result, img) => {
+                    result[img.src] = {
+                        id: img.id,
+                        src: img.src || "none",
+                    };
+                    return result;
+                }, {});
+            })();
+        """)
+    
+    def __resolve_images(self, mhtml_path, src_to_data):
+        resolved_src_to_data = {}
+        counter = 0;
+        with open(mhtml_path, "r", encoding="utf-8") as mhtml:
+            msg = email.message_from_file(mhtml)
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            if content_type.startswith("image/"):
+                content_location = part.get("Content-Location")
+                if content_location in src_to_data:
+                    image_bytes = part.get_payload(decode=True)
+                    if image_bytes:
+                        extension = content_type.split("/")[-1]
+                        counter += 1
+                        asset_path = f"assets/image-{counter}.{extension}"
+                        local_path = f"{os.path.dirname(mhtml_path)}/{asset_path}"
+                        with open(local_path, "wb") as img_file:
+                            img_file.write(image_bytes)
+                        resolved_src_to_data[content_location] = {}
+                        resolved_src_to_data[content_location]["asset"] = asset_path
+        return resolved_src_to_data
+
+    def __replace_images(self, html_path, src_to_data):
+        # Serialize the Python dictionary to a JSON string
+        src_to_data_json = json.dumps(src_to_data)
+
+        # Pass the JSON string into the JavaScript code
+        return self.html_manipulator.exec(html_path, f"""
+            (function() {{
+                let counter = 0;
+                const srcToData = {src_to_data_json};
+                const images = document.querySelectorAll('img');
+                
+                images.forEach(image => {{
+                    if (srcToData[image.src] && srcToData[image.src]['asset']) {{
+                        image.src = srcToData[image.src]['asset'];
+                        counter++;
+                    }}
+                }});
+                
+                return counter;
+            }})();
+        """)    
