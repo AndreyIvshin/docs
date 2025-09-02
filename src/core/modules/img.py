@@ -68,60 +68,72 @@ class ImagesRemediator(Module):
 
         self.logger.debug(f"Extracted images...")
         src_to_data = self.__extract_images(path)
+        for src, data in src_to_data.items():
+            print(data)
         self.logger.debug(f"Extracted {len(src_to_data)} images")
 
         self.logger.debug(f"Classifying images via LLM...")
         self.__classify_images(src_to_data)
         self.logger.debug(f"Images classified: {len(src_to_data)}")
         
-        for i, (src, data) in enumerate(src_to_data.items()):
-            if src_to_data[i]["has_text"]:
+        for src, data in src_to_data.items():
+            if data["has_text"]:
                 self.logger.debug(f"Extracting text via LLM...")
-                text = self.__extract_text(data["path"])
-                self.logger.debug(f"Text extracted: {text}")
+                data["text"] = self.__extract_text(data["path"])
+        
+        self.logger.debug(f"Adding text to mhtml...")
+        counter = self.__add_text(path, src_to_data)
+        self.logger.debug(f"Added text: {counter}")
 
         self.logger.debug(f"Images remediation completed in {time.time() - start_time:.2f} seconds.")
         self.logger.info(f"Remediated {len(src_to_data)} images.")
         self.report["img"] = len(src_to_data)
     
     def __extract_images(self, path):
-        images = self.mhtml_manipulator.exec(path, """
+        src_to_data = self.mhtml_manipulator.exec(path, """
             (function() {
                 const rootElement = document.getElementById('co_document_0');
                 const images = Array.from(rootElement.querySelectorAll('img'));
-                return images.map(img => img.src);
+                return images.reduce((result, img) => {
+                    result[img.src] = {
+                        alt: img.alt || null,
+                        id: img.id || null
+                    };
+                    return result;
+                }, {});
             })();
         """)
         with open(path, "r", encoding="utf-8") as file:
             msg = email.message_from_file(file)
-        images_paths = {}
         counter = 0;
         for part in msg.walk():
             content_type = part.get_content_type()
             if content_type.startswith("image/"):
                 content_location = part.get("Content-Location")
-                if content_location in images:
-                    image_data = part.get_payload(decode=True)
-                    if image_data:
+                if content_location in src_to_data:
+                    image_bytes = part.get_payload(decode=True)
+                    if image_bytes:
                         extension = content_type.split("/")[-1]
                         counter += 1
                         local_path = f"{path}_image_{counter}.{extension}"
                         with open(local_path, "wb") as img_file:
-                            img_file.write(image_data)
-                        images_paths[content_location] = {"path": local_path}
-        return images_paths
+                            img_file.write(image_bytes)
+                        src_to_data[content_location]["path"] = local_path
+        unresolved_srcs = [src for src, data in src_to_data.items() if "path" not in data]
+        for src in unresolved_srcs:
+            del src_to_data[src]
+        return src_to_data
     
     def __classify_images(self, src_to_data):
         paths = [data["path"] for src, data in src_to_data.items()]
         response = self.llm.ask(images=paths, prompt=f"""
-            Analyze all images attached and classify them by the following criterias:
+            Analyze every image attached and classify it by the following criterias:
                 - does this image contains text in the bottom?
                 - does this image a chart?
-            For each image analyzed, provide the following structured response:
+            For every image analyzed, provide the following structured response:
             ```json
             [
                 {{
-                    "src": "...",
                     "has_text": true/false,
                     "is_chart": true/false
                 }},
@@ -131,6 +143,7 @@ class ImagesRemediator(Module):
             ]
             ```
         """, max_tokens=15000, temperature=0, context="",)
+        self.logger.debug(f"LLM response:\n{response}")
         if response.startswith("```json") and response.endswith("```"):
             response = response[len("```json"):-len("```")].strip()
         response = json.loads(response)
@@ -151,7 +164,24 @@ class ImagesRemediator(Module):
             }}
             ```
         """, max_tokens=15000, temperature=0, context="",)
+        self.logger.debug(f"LLM response:\n{response}")
         if response.startswith("```json") and response.endswith("```"):
             response = response[len("```json"):-len("```")].strip()
-        return response
+        return json.loads(response)["text"]
 
+    def __add_text(self, path, src_to_data):
+        return self.mhtml_manipulator.exec(path, f"""
+            (function() {{
+                let counter = 0;
+                const srcToData = {json.dumps(src_to_data)};
+                const rootElement = document.getElementById('co_document_0');
+                for (const [src, data] of Object.entries(srcToData)) {{
+                    const imageElement = document.getElementById(data.id);
+                    const divElement = document.createElement('div');
+                    divElement.textContent = data.text;
+                    imageElement.insertAdjacentElement('afterend', divElement);
+                    counter++;
+                }}
+                return counter;
+            }})();
+        """)
