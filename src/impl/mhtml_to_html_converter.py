@@ -8,22 +8,21 @@ class HtmlConverter:
     def exec(self, mhtml_path):
         html_path = self.__create_html(mhtml_path)
         location_to_asset = self.__load_assets(mhtml_path)
+        with open(f"{os.path.dirname(html_path)}/assets/text-1.html", "r") as file:
+            content = file.read()
+        with open(html_path, 'w') as file:
+            file.write(content)
         self.__fix_css(html_path, location_to_asset)
         self.__fix_html(html_path, location_to_asset)
-        print(self.__fix_link_crossorigin(html_path))
-        print(self.__fix_fonts(html_path, location_to_asset))
+        self.__fix_link_crossorigin(html_path)
+        self.__fix_fonts(html_path, location_to_asset)
 
     def __create_html(self, mhtml_path):
-        html = self.mhtml_manipulator.exec(mhtml_path, """
-            (function() {
-                return document.documentElement.outerHTML;
-            })();
-        """)
         dirname = os.path.dirname(mhtml_path)
         filename = os.path.basename(mhtml_path)[:-6] + ".html"
         html_path = f"{dirname}/{filename}"
         with open(html_path, "w", encoding="utf-8") as file:
-            file.write(html)
+            file.write("")
         if not os.path.exists(f"{dirname}/assets"):
             os.makedirs(f"{dirname}/assets")
         return html_path
@@ -50,7 +49,6 @@ class HtmlConverter:
                     img_file.write(bytes)
                 location_to_asset[content_location] = {}
                 location_to_asset[content_location]["asset"] = asset_path
-        print(types)
         return location_to_asset
     
     def __fix_css(self, html_path, location_to_asset):
@@ -73,7 +71,6 @@ class HtmlConverter:
     def __fix_html(self, html_path, location_to_asset):
         with open(html_path, "r") as file:
             content = file.read()
-            print(content)
         for location, data in location_to_asset.items():
             content = content.replace(f'{html.escape(location)}', f'{data["asset"]}')
         with open(html_path, 'w') as file:

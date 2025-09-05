@@ -42,7 +42,7 @@ def main(mhtml, keep):
     HtmlConverter(mhtml_manipulator, html_manipulator).exec(path)
 
     for module in [
-        IdMarker(mhtml_manipulator, logger_factory),
+        # IdMarker(mhtml_manipulator, logger_factory),
         # ImgFolder(mhtml_manipulator, logger_factory),
         # HeadingRemediator(mhtml_manipulator, logger_factory, report),
         # ImagesRemediator(mhtml_manipulator, logger_factory, llm, report),
