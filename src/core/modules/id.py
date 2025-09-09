@@ -8,48 +8,52 @@ class IdMarker(SoapModule):
     def fix(self, html_path):
         self.logger.debug("Starting id marking ...")
         start_time = time.time()
-        self.__fix(html_path)
+        counter = self.__fix(html_path)
         self.logger.debug(f"Id marking took {time.time() - start_time:.2f} s")
-        self.logger.info(f"Elements marked: {self.counter}")
+        self.logger.info(f"Elements marked: {counter}")
     
     def __fix(self, html_path):
-        self.counter = 0
+        counter = 0
         soup = self._parse_html(html_path)
         document = soup.find("div", id="co_document_0")
         if document:
-            self.__gen_id(document)
+            counter = self.__gen_id(document, counter)
         self._save_html(html_path, soup)
+        return counter
         
-    def __gen_id(self, element):
+    def __gen_id(self, element, counter):
         for child in element.children:
             if child.name:
                 if not child.get("id"):
-                    self.counter += 1
-                    child["id"] = f"{AUTOGEN_ID_PREFIX}-{self.counter}"
-                self.__gen_id(child)
+                    counter += 1
+                    child["id"] = f"{AUTOGEN_ID_PREFIX}-{counter}"
+                counter = self.__gen_id(child, counter)
+        return counter
 
 class IdUnmarker(SoapModule):
 
     def fix(self, html_path):
         self.logger.debug("Starting id unmarking ...")
         start_time = time.time()
-        self.__fix(html_path)
+        counter = self.__fix(html_path)
         self.logger.debug(f"Id unmarking took {time.time() - start_time:.2f} s")
-        self.logger.info(f"Elements unmarked: {self.counter}")
+        self.logger.info(f"Elements unmarked: {counter}")
     
     def __fix(self, html_path):
-        self.counter = 0
+        counter = 0
         soup = self._parse_html(html_path)
         document = soup.find("div", id="co_document_0")
         if document:
-            self.__del_id(document)
+            counter = self.__del_id(document, counter)
         self._save_html(html_path, soup)
+        return counter
         
-    def __del_id(self, element):
+    def __del_id(self, element, counter):
         for child in element.children:
             if child.name:
                 id_attr = child.get("id")
                 if id_attr and id_attr.startswith(AUTOGEN_ID_PREFIX):
-                    self.counter += 1
+                    counter += 1
                     del child["id"]
-                self.__del_id(child)
+                counter = self.__del_id(child, counter)
+        return counter
