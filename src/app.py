@@ -16,7 +16,7 @@ def main(mhtml_path):
     for module in [
         IdMarker(logger_factory),
         HeaderRemediator(logger_factory),
-        IdUnmarker(logger_factory),
+        # IdUnmarker(logger_factory),
     ]:
         report.update(module.fix(html_path))
     

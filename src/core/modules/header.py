@@ -4,7 +4,7 @@ import time
 HEADER_ID = "a11ypoc-header"
 
 class HeaderRemediator(SoapModule):
-    
+
     def fix(self, html_path):
         self.logger.debug("Starting header remediation ...")
         start_time = time.time()
@@ -112,6 +112,7 @@ class HeaderRemediator(SoapModule):
         return True, 1
 
     # files: 4, 21
+    # 2  ... | co_section - false positive
     # 4  ... | co_section
     # 21 ... | co_section
     def __stop_after(self, soup):
