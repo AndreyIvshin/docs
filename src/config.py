@@ -3,6 +3,8 @@ from impl.screenshot_maker import Mhtml2Png
 from impl.mhtml_manipulator import MhtmlManipulator, HtmlManipulator
 import os, logging, colorlog
 
+OUTPUT_DIR = "tmp"
+
 def llm():
     return OpenAIClient(
         api_key=os.getenv("OPEN_AI_API_KEY"),
