@@ -1,53 +1,55 @@
-from core.module import Module
+from core.module import SoapModule
 import time
 
-class IdMarker(Module):
-    def __init__(self, mhtml_manipulator, logger_factory):
-        super().__init__(mhtml_manipulator, logger_factory)
+AUTOGEN_ID_PREFIX = "a11ypoc-autogen-id"
 
-    def fix_mhtml(self, path):
-        self.logger.debug(f"Starting id markering...")
+class IdMarker(SoapModule):
+
+    def fix(self, html_path):
+        self.logger.debug("Starting id marking ...")
         start_time = time.time()
-        counter = self.mhtml_manipulator.exec(path, """
-            (function() {
-                let counter = 0;
-                const rootElement = document.getElementById('co_document_0');
-                if (rootElement) {
-                    const allElements = rootElement.querySelectorAll('*');
-                    allElements.forEach(element => {
-                        if (!element.id) {
-                            element.id = `a11ypoc_marker_id_${counter++}`;
-                        }
-                    });
-                }
-                return counter;
-            })();
-        """)
-        self.logger.debug(f"Id markering completed in {time.time() - start_time:.2f} seconds.")
-        self.logger.info(f"Marked {counter} elements.")
+        self.__fix(html_path)
+        self.logger.debug(f"Id marking took {time.time() - start_time:.2f} s")
+        self.logger.info(f"Elements marked: {self.counter}")
+    
+    def __fix(self, html_path):
+        self.counter = 0
+        soup = self._parse_html(html_path)
+        document = soup.find("div", id="co_document_0")
+        if document:
+            self.__gen_id(document)
+        self._save_html(html_path, soup)
+        
+    def __gen_id(self, element):
+        for child in element.children:
+            if child.name:
+                if not child.get("id"):
+                    self.counter += 1
+                    child["id"] = f"{AUTOGEN_ID_PREFIX}-{self.counter}"
+                self.__gen_id(child)
 
-class IdUnmarker(Module):
-    def __init__(self, mhtml_manipulator, logger_factory):
-        super().__init__(mhtml_manipulator, logger_factory)
+class IdUnmarker(SoapModule):
 
-    def fix_mhtml(self, path):
-        self.logger.debug(f"Starting id unmarking...")
+    def fix(self, html_path):
+        self.logger.debug("Starting id unmarking ...")
         start_time = time.time()
-        counter = self.mhtml_manipulator.exec(path, """
-            (function() {
-                let counter = 0;
-                const rootElement = document.getElementById('co_document_0');
-                if (rootElement) {
-                    const allElements = rootElement.querySelectorAll('*');
-                    allElements.forEach(element => {
-                        if (element.id && element.id.startsWith('a11ypoc_marker_id_')) {
-                            element.removeAttribute('id');
-                            counter++;
-                        }
-                    });
-                }
-                return counter;
-            })();
-        """)
-        self.logger.debug(f"Id unmarking completed in {time.time() - start_time:.2f} seconds.")
-        self.logger.info(f"Unmarked {counter} elements.")
+        self.__fix(html_path)
+        self.logger.debug(f"Id unmarking took {time.time() - start_time:.2f} s")
+        self.logger.info(f"Elements unmarked: {self.counter}")
+    
+    def __fix(self, html_path):
+        self.counter = 0
+        soup = self._parse_html(html_path)
+        document = soup.find("div", id="co_document_0")
+        if document:
+            self.__del_id(document)
+        self._save_html(html_path, soup)
+        
+    def __del_id(self, element):
+        for child in element.children:
+            if child.name:
+                id_attr = child.get("id")
+                if id_attr and id_attr.startswith(AUTOGEN_ID_PREFIX):
+                    self.counter += 1
+                    del child["id"]
+                self.__del_id(child)

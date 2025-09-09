@@ -8,6 +8,7 @@ class MhtmlParser():
         html_path, location_to_asset = self.__prepare_html(work_dir, location_to_asset)
         self.__fix_html(html_path, location_to_asset)
         self.__fix_css(work_dir, location_to_asset)
+        return html_path
     
     def __prepare_work_dir(self, mhtml_path, output_dir):
         work_dir = Path(output_dir).resolve()/Path(mhtml_path).resolve().stem
