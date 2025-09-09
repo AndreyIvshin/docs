@@ -1,5 +1,6 @@
 from api.cli import cli_args
 from core.modules.id import IdMarker, IdUnmarker
+from core.modules.header import HeaderRemediator
 from impl.mhtml import MhtmlParser
 import config, time
 
@@ -13,6 +14,7 @@ def main(mhtml_path):
     html_path = MhtmlParser().parse(mhtml_path, config.OUTPUT_DIR)
     for module in [
         IdMarker(logger_factory),
+        HeaderRemediator(logger_factory),
         IdUnmarker(logger_factory),
     ]:
         module.fix(html_path)
