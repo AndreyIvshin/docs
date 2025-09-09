@@ -4,13 +4,14 @@ import time
 HEADER_ID = "a11ypoc-header"
 
 class HeaderRemediator(SoapModule):
-
+    
     def fix(self, html_path):
         self.logger.debug("Starting header remediation ...")
         start_time = time.time()
         counter = self.__fix(html_path)
         self.logger.debug(f"Header remediation took {time.time() - start_time:.2f} s")
         self.logger.info(f"Headers remediated: {counter}")
+        return {"headers": counter}
     
     def __fix(self, html_path):
         counter = 0
@@ -22,8 +23,10 @@ class HeaderRemediator(SoapModule):
     def __apply_patterns(self, soup):
         for pattern in [
             self.__no_document,
+            # self.__search,
             self.__special_class,
-            self.__stop_sequence,
+            self.__stop_before,
+            self.__stop_after,
         ]:
             should_stop, counter = pattern(soup)
             if should_stop:
@@ -48,6 +51,14 @@ class HeaderRemediator(SoapModule):
                 div.wrap(self.__create_header(soup))
                 return True, 1
         return False, 0
+    
+    def __search(self, soup):
+        document = soup.find("div", id="co_document_0")
+        if document:
+            div = document.find("div", class_="co_frontMatter")
+            if div:
+                self.logger.critical("co_frontMatter")
+        return False, 0
 
     def __create_header(self, soup):
         header = soup.new_tag("header")
@@ -55,7 +66,7 @@ class HeaderRemediator(SoapModule):
         header["aria-label"] = "Preliminary material"
         return header
     
-    # files: 4, 6, 7, 12, 14, 16, 17, 18, 19, 20, 21, 25, 26
+    # files: 6, 7, 12, 14, 16, 17, 18, 19, 20, 25, 26
 
     # 16 ... | co_synopsis
     # 25 ... | co_synopsis
@@ -63,9 +74,8 @@ class HeaderRemediator(SoapModule):
     # 7  ... | co_courtHeadnotes
     # 17 ... | co_courtHeadnotes
     # 18 ... | co_courtHeadnotes
-    
-    # 4  ... | co_section
-    # 21 ... | co_section
+
+    # 14 ... | crsw_headnote
 
     # 6  ... | x_article
     # 12 ... | x_article
@@ -74,18 +84,19 @@ class HeaderRemediator(SoapModule):
     # 19 ... | x_mainTextBody
     # 20 ... | x_mainTextBody
     
-    # 14 ... | crsw_headnote
-    def __stop_sequence(self, soup):
-        self.logger.debug(f"Trying 'stop_sequence' pattern ...")
+    # 22 ... | co_text
+    def __stop_before(self, soup):
+        self.logger.debug(f"Trying 'stop_before' pattern ...")
         document = soup.find("div", id="co_document_0")
         stops = []
         for arg in [
             {"name": "id", "value": "co_courtHeadnotes"},
             {"name": "class_", "value": "co_synopsis"},
-            {"name": "class_", "value": "co_section"},
+            {"name": "id", "value": "crsw_headnote"},
             {"name": "class_", "value": "x_article"},
             {"name": "class_", "value": "x_mainTextBody"},
-            {"name": "id", "value": "crsw_headnote"},
+            {"name": "class_", "value": "co_text"},
+            {"name": "class_", "value": "co_text"},
         ]:
             stop = document.find("div", **{arg["name"]: arg["value"]})
             if stop:
@@ -99,13 +110,33 @@ class HeaderRemediator(SoapModule):
             header.append(child.extract())
         child.insert_before(header)
         return True, 1
+
+    # files: 4, 21
+    # 4  ... | co_section
+    # 21 ... | co_section
+    def __stop_after(self, soup):
+        self.logger.debug(f"Trying 'stop_after' pattern ...")
+        document = soup.find("div", id="co_document_0")
+        stops = []
+        for arg in [
+            {"name": "class_", "value": "co_frontMatter"},
+        ]:
+            stop = document.find("div", **{arg["name"]: arg["value"]})
+            if stop:
+                stops.append(stop)
+        if not stops:
+            return False, 0
+        header = self.__create_header(soup)
+        should_stop = False
+        for child in list(document.children):
+            if should_stop:
+                break
+            if child in stops:
+                should_stop = True
+            header.append(child.extract())
+        child.insert_before(header)
+        return True, 1
     
     # files: 1, 2, 28
     def __date(self, soup):
         return False
-    
-    # files: 22
-    # 22 ... | -> (co_binAuthor) co_text
-    def __llm(self, soup):
-        return False
-

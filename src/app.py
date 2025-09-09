@@ -11,17 +11,18 @@ def main(mhtml_path):
     logger.warning(f"Starting remediation ...")
     start_time = time.time()
 
+    report = {}
     html_path = MhtmlParser().parse(mhtml_path, config.OUTPUT_DIR)
     for module in [
         IdMarker(logger_factory),
         HeaderRemediator(logger_factory),
         IdUnmarker(logger_factory),
     ]:
-        module.fix(html_path)
+        report.update(module.fix(html_path))
     
     logger.warning(f"Remediation took {time.time() - start_time:.2f} s")
     logger.warning(f"Output: {html_path}")
-    return {}
+    return report
 
 if __name__ == "__main__":
     args = cli_args()

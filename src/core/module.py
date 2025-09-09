@@ -4,8 +4,8 @@ class Module:
     def __init__(self, logger_factory):
         self.logger = logger_factory(type(self).__name__)
 
-    def fix_mhtml(self, html_path):
-        raise Exception("Not implemented!")
+    def fix(self, html_path):
+        return {}
 
 class SoapModule(Module):
 
