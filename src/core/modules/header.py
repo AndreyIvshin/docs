@@ -49,11 +49,18 @@ class HeaderRemediator(SoapModule):
     def __special_class(self, soup):
         self.logger.debug(f"Trying 'special_class' pattern ...")
         document = soup.find("div", id="co_document_0")
-        if document:
-            div = document.find("div", class_="co_documentHead", recursive=False)
-            if div:
-                div.wrap(self.__create_header(soup))
-                return True, 1
+        stop = document.find("div", class_="co_documentHead", recursive=False)
+        if stop:
+            header = self.__create_header(soup)
+            should_stop = False
+            for child in list(document.children):
+                if should_stop:
+                    break
+                if child == stop:
+                    should_stop = True
+                header.append(child.extract())
+            child.insert_before(header)
+            return True, 1
         return False, 0
     
     def __create_header(self, soup):
