@@ -2,7 +2,9 @@ from api.cli import cli_args
 from core.modules.id import IdMarker, IdUnmarker
 from core.modules.header import HeaderRemediator
 from impl.mhtml import MhtmlParser
-import config, time
+from impl.screenshot import Html2Png
+from impl.llm import OpenAIClient
+import config, time, os
 
 def main(mhtml_path):
     logger_factory = config.logger_factory()
@@ -13,6 +15,8 @@ def main(mhtml_path):
 
     report = {}
     html_path = MhtmlParser().parse(mhtml_path, config.OUTPUT_DIR)
+    # html2png = Html2Png()
+    # llm = OpenAIClient(os.getenv("OPEN_AI_API_KEY"), os.getenv("OPEN_AI_API_URL"))
     for module in [
         IdMarker(logger_factory),
         HeaderRemediator(logger_factory),

@@ -1,8 +1,8 @@
 from app import main
 
 DATA = [
-    {"data/1.mhtml":  {"headers": 0, "toc": 0, "ul": 7, "h3": 8, "h4": 5}}, # 5 ul in table?
-    {"data/2.mhtml":  {"headers": 0, "toc": 1, "ul": -1, "h3": 27, "h4": 0}}, # too sparce ul
+    {"data/1.mhtml":  {"headers": 1, "toc": 0, "ul": 7, "h3": 8, "h4": 5}}, # 5 ul in table?
+    {"data/2.mhtml":  {"headers": 1, "toc": 1, "ul": -1, "h3": 27, "h4": 0}}, # too sparce ul
     {"data/3.mhtml":  {"headers": 1, "toc": 0, "ul": -1, "h3": 1, "h4": 0}},
     {"data/4.mhtml":  {"headers": 1, "toc": 0, "ul": -1, "h3": 4, "h4": 4}},
     {"data/5.mhtml":  {"headers": 1, "toc": 0, "ul": -1, "h3": 0, "h4": 0}},
@@ -28,7 +28,7 @@ DATA = [
     {"data/25.mhtml": {"headers": 1, "toc": 0, "ul": -1, "h3": -1, "h4": -1}},
     {"data/26.mhtml": {"headers": 1, "toc": 0, "ul": -1, "h3": -1, "h4": -1}},
     {"data/27.mhtml": {"headers": 1, "toc": 0, "ul": -1, "h3": -1, "h4": -1}},
-    {"data/28.mhtml": {"headers": 0, "toc": 0, "ul": -1, "h3": -1, "h4": -1}},
+    {"data/28.mhtml": {"headers": 1, "toc": 0, "ul": -1, "h3": -1, "h4": -1}},
 ]
 
 SCOPE = [

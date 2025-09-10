@@ -1,5 +1,4 @@
-import requests
-import base64
+import requests, base64
 
 class OpenAIClient:
     def __init__(self, api_key, api_url):
@@ -28,13 +27,13 @@ class OpenAIClient:
             return assistant_response
         except requests.exceptions.HTTPError as http_err:
             error_message = response.text if response.content else str(http_err)
-            return f"HTTP Error: {http_err}\nDetails: {error_message}"
+            raise Exception(f"HTTP Error: {http_err}; Details: {error_message}")
         except requests.exceptions.RequestException as req_err:
-            return f"Request Error: {req_err}"
+            raise Exception(f"Request Error: {req_err}")
         except KeyError:
-            return "Error: Unexpected response structure."
+            raise Exception("Error: Unexpected response structure.")
         except ValueError as val_err:
-            return f"Value Error: {val_err}"
+            raise Exception(f"Value Error: {val_err}")
     
     def __base64_image_parts(self, images):
         image_parts = []

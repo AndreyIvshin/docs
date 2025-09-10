@@ -1,9 +1,12 @@
 from core.module import SoapModule
-import time, re
+import time, re, copy
+from impl.screenshot import Html2Png
 
 HEADER_ID = "a11ypoc-header"
 
 class HeaderRemediator(SoapModule):
+    def __init__(self, logger_factory):
+        super().__init__(logger_factory)
 
     def fix(self, html_path):
         self.logger.debug("Starting header remediation ...")
@@ -23,11 +26,11 @@ class HeaderRemediator(SoapModule):
     def __apply_patterns(self, soup):
         for pattern in [
             self.__no_document,
-            # self.__search,
             self.__special_class,
             self.__stop_before,
             self.__stop_after,
             self.__date,
+            self.__toc
         ]:
             should_stop, counter = pattern(soup)
             if should_stop:
@@ -47,20 +50,12 @@ class HeaderRemediator(SoapModule):
         self.logger.debug(f"Trying 'special_class' pattern ...")
         document = soup.find("div", id="co_document_0")
         if document:
-            div = document.find("div", class_="co_documentHead")
+            div = document.find("div", class_="co_documentHead", recursive=False)
             if div:
                 div.wrap(self.__create_header(soup))
                 return True, 1
         return False, 0
     
-    def __search(self, soup):
-        document = soup.find("div", id="co_document_0")
-        if document:
-            div = document.find("div", class_="co_frontMatter")
-            if div:
-                self.logger.critical("co_frontMatter")
-        return False, 0
-
     def __create_header(self, soup):
         header = soup.new_tag("header")
         header["id"] = HEADER_ID
@@ -99,7 +94,7 @@ class HeaderRemediator(SoapModule):
             {"name": "class_", "value": "co_text"},
             {"name": "class_", "value": "co_text"},
         ]:
-            stop = document.find("div", **{arg["name"]: arg["value"]})
+            stop = document.find("div", **{arg["name"]: arg["value"]}, recursive=False)
             if stop:
                 stops.append(stop)
         if not stops:
@@ -113,13 +108,14 @@ class HeaderRemediator(SoapModule):
         return True, 1
 
     # files: 4, 21
+    # 4  ... co_frontMatter | co_section
+    # 21 ... co_frontMatter| co_section
+
     # 2  ... | co_section - false positive
-    # 4  ... | co_section
-    # 21 ... | co_section
     def __stop_after(self, soup):
         self.logger.debug(f"Trying 'stop_after' pattern ...")
         document = soup.find("div", id="co_document_0")
-        stop = document.find("div", class_="co_frontMatter")
+        stop = document.find("div", class_="co_frontMatter", recursive=False)
         if stop:
             header = self.__create_header(soup)
             should_stop = False
@@ -133,7 +129,7 @@ class HeaderRemediator(SoapModule):
             return True, 1
         return False, 0
     
-    # files: 1, 2, 28
+    # files: 1, 28
     def __date(self, soup):
         self.logger.debug(f"Trying 'date' pattern ...")
         document = soup.find("div", id="co_document_0")
@@ -144,13 +140,11 @@ class HeaderRemediator(SoapModule):
         for child in list(document.children):
             text = child.get_text(strip=True)
             if re.match(pattern, text):
-                self.logger.critical(text)
                 stop = child
                 break
             limit -= 1
             if limit < 0:
                 break
-
         if stop:
             header = self.__create_header(soup)
             should_stop = False
@@ -161,5 +155,29 @@ class HeaderRemediator(SoapModule):
                     should_stop = True
                 header.append(child.extract())
             child.insert_before(header)
+            return True, 1
+        return False, 0
+    
+    # files: 2
+    # ... | co_section[co_anchor_tbl1]
+    def __toc(self, soup):
+        self.logger.debug(f"Trying 'toc' pattern ...")
+        document = soup.find("div", id="co_document_0")
+        section = document.find("div", class_="co_section", recursive=False)
+        toc = section.find("div", id="co_anchor_tbl1", recursive=False)
+        if section and toc:
+            header = self.__create_header(soup)
+            for child in list(document.children):
+                if child == section:
+                    break
+                header.append(child.extract())
+            section_copy = copy.deepcopy(section) 
+            section_copy.clear()
+            for child in list(section.children):
+                if child["id"] == "co_anchor_tbl1":
+                    break
+                section_copy.append(child.extract())
+            header.append(section_copy)
+            section.insert_before(header)
             return True, 1
         return False, 0
