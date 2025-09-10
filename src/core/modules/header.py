@@ -1,5 +1,5 @@
 from core.module import SoapModule
-import time
+import time, re
 
 HEADER_ID = "a11ypoc-header"
 
@@ -27,6 +27,7 @@ class HeaderRemediator(SoapModule):
             self.__special_class,
             self.__stop_before,
             self.__stop_after,
+            self.__date,
         ]:
             should_stop, counter = pattern(soup)
             if should_stop:
@@ -118,26 +119,47 @@ class HeaderRemediator(SoapModule):
     def __stop_after(self, soup):
         self.logger.debug(f"Trying 'stop_after' pattern ...")
         document = soup.find("div", id="co_document_0")
-        stops = []
-        for arg in [
-            {"name": "class_", "value": "co_frontMatter"},
-        ]:
-            stop = document.find("div", **{arg["name"]: arg["value"]})
-            if stop:
-                stops.append(stop)
-        if not stops:
-            return False, 0
-        header = self.__create_header(soup)
-        should_stop = False
-        for child in list(document.children):
-            if should_stop:
-                break
-            if child in stops:
-                should_stop = True
-            header.append(child.extract())
-        child.insert_before(header)
-        return True, 1
+        stop = document.find("div", class_="co_frontMatter")
+        if stop:
+            header = self.__create_header(soup)
+            should_stop = False
+            for child in list(document.children):
+                if should_stop:
+                    break
+                if child == stop:
+                    should_stop = True
+                header.append(child.extract())
+            child.insert_before(header)
+            return True, 1
+        return False, 0
     
     # files: 1, 2, 28
     def __date(self, soup):
-        return False
+        self.logger.debug(f"Trying 'date' pattern ...")
+        document = soup.find("div", id="co_document_0")
+        pattern = r"^(?:Date:\s*)?(January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4}$"
+        header = self.__create_header(soup)
+        stop = None
+        limit = 15
+        for child in list(document.children):
+            text = child.get_text(strip=True)
+            if re.match(pattern, text):
+                self.logger.critical(text)
+                stop = child
+                break
+            limit -= 1
+            if limit < 0:
+                break
+
+        if stop:
+            header = self.__create_header(soup)
+            should_stop = False
+            for child in list(document.children):
+                if should_stop:
+                    break
+                if child == stop:
+                    should_stop = True
+                header.append(child.extract())
+            child.insert_before(header)
+            return True, 1
+        return False, 0
